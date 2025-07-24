@@ -41,7 +41,7 @@ export function SignupForm({
           Use your Google account to get started.
         </p>
       </div>
-      <p>lol</p>
+      
       <Button
         className="w-full"
         disabled={isLoading}
