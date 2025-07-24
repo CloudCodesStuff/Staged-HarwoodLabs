@@ -1,0 +1,279 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// Legacy Post model (keeping for compatibility)
+model Post {
+    id        Int      @id @default(autoincrement())
+    name      String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    createdBy   User   @relation(fields: [createdById], references: [id])
+    createdById String
+
+    @@index([name])
+}
+
+// Necessary for Next auth
+model Account {
+    id                       String  @id @default(cuid())
+    userId                   String
+    type                     String
+    provider                 String
+    providerAccountId        String
+    refresh_token            String? // @db.Text
+    access_token             String? // @db.Text
+    expires_at               Int?
+    token_type               String?
+    scope                    String?
+    id_token                 String? // @db.Text
+    session_state            String?
+    user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    refresh_token_expires_in Int?
+
+    @@unique([provider, providerAccountId])
+}
+
+model Session {
+    id           String   @id @default(cuid())
+    sessionToken String   @unique
+    userId       String
+    expires      DateTime
+    user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+    id            String    @id @default(cuid())
+    name          String?
+    email         String?   @unique
+    emailVerified DateTime?
+    image         String?
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    onboarded     Boolean   @default(false)
+
+    // Auth relations
+    accounts Account[]
+    sessions Session[]
+    posts    Post[]
+
+    // User's projects
+    projects       Project[]
+    UserOnboarding UserOnboarding?
+    
+    stripeCustomerId         String?
+    stripeSubscriptionId     String?
+    stripeSubscriptionStatus StripeSubscriptionStatus?
+
+    documents    Document[]
+    activityLogs ActivityLog[]
+
+    ownedPortals      Portal[]     @relation("PortalOwner")
+    portalMemberships PortalUser[]
+
+    @@map("users")
+}
+
+enum StripeSubscriptionStatus {
+    incomplete
+    incomplete_expired
+    trialing
+    active
+    past_due
+    canceled
+    unpaid
+    paused
+}
+
+model VerificationToken {
+    identifier String
+    token      String   @unique
+    expires    DateTime
+
+    @@unique([identifier, token])
+}
+
+model StripeEvent {
+    id               String   @id @unique
+    api_version      String?
+    data             Json
+    request          Json?
+    type             String
+    object           String
+    account          String?
+    created          DateTime
+    livemode         Boolean
+    pending_webhooks Int
+}
+
+model UserOnboarding {
+    id            String   @id @default(cuid())
+    userId        String   @unique
+    role          String
+    company       String?
+    teamSize      String
+    workflowStyle String
+    primaryGoal   String
+    completedAt   DateTime @default(now())
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+    id          String   @id @default(cuid())
+    name        String
+    clientName  String
+    description String?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    // Owner relationship
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    // Portal customization
+    primaryColor    String @default("#3b82f6")
+    textColor       String @default("#1f2937")
+    backgroundColor String @default("#ffffff")
+    textSize        String @default("base") // "sm" | "base" | "lg"
+    spacing         String @default("normal") // "tight" | "normal" | "loose"
+    roundedness     String @default("md") // "none" | "sm" | "md" | "lg" | "xl"
+
+    // Project components
+    updates      Update[]
+    milestones   Milestone[]
+    comments     Comment[]
+    documents    Document[]
+    activityLogs ActivityLog[]
+
+    @@map("projects")
+}
+
+model Portal {
+    id        String   @id @default(cuid())
+    name      String
+    ownerId   String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    owner       User         @relation("PortalOwner", fields: [ownerId], references: [id])
+    memberships PortalUser[]
+}
+
+model PortalUser {
+    id          String   @id @default(cuid())
+    portalId    String
+    userId      String?
+    email       String
+    role        String // 'owner' | 'client'
+    status      String // 'invited' | 'active' | 'removed'
+    invitedBy   String? // userId of inviter
+    inviteToken String? // for pending invites
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    portal Portal @relation(fields: [portalId], references: [id])
+    user   User?  @relation(fields: [userId], references: [id])
+
+    @@unique([portalId, email])
+}
+
+model Update {
+    id        String   @id @default(cuid())
+    name      String
+    content   Json
+    important Boolean  @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Project relationship
+    projectId String
+    project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    @@map("updates")
+}
+
+model Milestone {
+    id          String   @id @default(cuid())
+    name        String
+    description String?
+    completed   Boolean  @default(false)
+    order       Int      @default(0)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    // Project relationship
+    projectId String
+    project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    @@map("milestones")
+}
+
+model Comment {
+    id          String   @id @default(cuid())
+    clientName  String // From localStorage
+    clientEmail String // From localStorage
+    content     String
+    createdAt   DateTime @default(now())
+
+    // Project relationship
+    projectId String
+    project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+    @@map("comments")
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String?
+  type      String
+  title     String
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  parentId  String? // For folders and hierarchy
+    isFolder  Boolean  @default(false)
+  tags      String[] // For filtering/search
+  ownerId   String? // For permissions (project owner)
+
+    user     User              @relation(fields: [userId], references: [id])
+    project  Project?          @relation(fields: [projectId], references: [id])
+    parent   Document?         @relation("FolderParent", fields: [parentId], references: [id])
+    children Document[]        @relation("FolderParent")
+    versions DocumentVersion[]
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  documentId String
+  fileUrl    String
+  uploadedBy String
+  createdAt  DateTime @default(now())
+  createdBy  String? // User who uploaded this version
+
+    document Document @relation(fields: [documentId], references: [id])
+}
+
+model ActivityLog {
+    id         String   @id @default(cuid())
+    projectId  String
+    userId     String
+    action     String
+    targetId   String?
+  targetType String?
+    message    String?
+    createdAt  DateTime @default(now())
+
+    user    User    @relation(fields: [userId], references: [id])
+    project Project @relation(fields: [projectId], references: [id])
+}
