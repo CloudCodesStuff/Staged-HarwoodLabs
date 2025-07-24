@@ -61,4 +61,4 @@ export const authConfig = {
       },
     }),
   },
-} satisfies NextAuthConfig; 
+} satisfies NextAuthConfig;  
